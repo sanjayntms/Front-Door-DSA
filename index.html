@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DSA Flask App</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
+    h1 { color: #2196f3; }
+  </style>
+</head>
+<body>
+  <h1>🌐 Dynamic Site Acceleration</h1>
+  <p id="info">Loading...</p>
+  <script>
+    fetch('/api/data')
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById('info').innerText =
+          `Served by ${data.server} at ${data.timestamp}`;
+      });
+  </script>
+</body>
+</html>
