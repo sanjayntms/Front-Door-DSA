@@ -58,38 +58,41 @@ jobs:
             sudo mkdir -p /var/www/flaskapp
           EOF
 
-      - name: Copy files and deploy Flask app
+      - name: Setup and Start Flask App
         run: |
          sshpass -p $ADMIN_PASSWORD scp -o StrictHostKeyChecking=no $GITHUB_WORKSPACE/index.html azureuser@$PUBLIC_IP:/home/azureuser/index.html
          sshpass -p $ADMIN_PASSWORD scp -o StrictHostKeyChecking=no $GITHUB_WORKSPACE/dsaapp.py azureuser@$PUBLIC_IP:/home/azureuser/dsaapp.py
 
-         sshpass -p $ADMIN_PASSWORD ssh -o StrictHostKeyChecking=no azureuser@$PUBLIC_IP <<EOF
+         sshpass -p $ADMIN_PASSWORD ssh -o StrictHostKeyChecking=no azureuser@$PUBLIC_IP << 'EOF'
+         # Create Flask app folder
          sudo mkdir -p /var/www/flaskapp/templates
+      
+         # Move files to proper location
          sudo mv /home/azureuser/index.html /var/www/flaskapp/templates/index.html
          sudo mv /home/azureuser/dsaapp.py /var/www/flaskapp/app.py
+
+         # Install Flask
+         sudo apt update
+         sudo apt install -y python3-flask
+
+         # Create systemd service
+         echo "[Unit]
+         Description=Gunicorn instance to serve flaskapp
+         After=network.target
+
+         [Service]
+          User=www-data
+          Group=www-data
+         WorkingDirectory=/var/www/flaskapp
+         ExecStart=/usr/bin/python3 /var/www/flaskapp/app.py
+         Restart=always
+
+         [Install]
+         WantedBy=multi-user.target" | sudo tee /etc/systemd/system/flaskapp.service > /dev/null
+
+         # Reload systemd and start service
+         sudo systemctl daemon-reexec
+         sudo systemctl daemon-reload
+         sudo systemctl enable flaskapp.service
+         sudo systemctl start flaskapp.service
          EOF
-
-      - name: Create flaskapp service and enable it
-        run: |
-          sshpass -p $ADMIN_PASSWORD ssh -o StrictHostKeyChecking=no azureuser@${{ env.PUBLIC_IP }} << 'EOF'
-            sudo echo "[Unit]
-            Description=Flask App
-            After=network.target
-
-            [Service]
-            ExecStart=/usr/bin/python3 /var/www/flaskapp/app.py
-            WorkingDirectory=/var/www/flaskapp
-            Restart=always
-
-            [Install]
-            WantedBy=multi-user.target" > /etc/systemd/system/flaskapp.service
-
-            sudo systemctl daemon-reexec
-            sudo systemctl daemon-reload
-            sudo systemctl enable flaskapp
-            sudo systemctl start flaskapp
-          EOF
-
-      - name: Restart Flask app service
-        run: |
-          sshpass -p $ADMIN_PASSWORD ssh -o StrictHostKeyChecking=no azureuser@${{ env.PUBLIC_IP }} "sudo systemctl restart flaskapp"
