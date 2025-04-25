@@ -32,8 +32,7 @@ jobs:
             --name webvm-${{ matrix.region }} \
             --image UbuntuLTS \
             --admin-username azureuser \
-            --admin-password $ADMIN_PASSWORD \
-            --custom-data "${{ github.workspace }}/cloud-init.yml"
+            --admin-password $ADMIN_PASSWORD
 
       - name: Open port 80
         run: |
@@ -48,6 +47,16 @@ jobs:
       - name: Install sshpass
         run: |
           sudo apt-get install -y sshpass
+
+      - name: Install Flask and related components on VM
+        run: |
+          sshpass -p $ADMIN_PASSWORD ssh -o StrictHostKeyChecking=no azureuser@${{ env.PUBLIC_IP }} << 'EOF'
+            sudo apt-get update
+            sudo apt-get install -y python3 python3-pip
+            sudo pip3 install flask
+            sudo mkdir -p /var/www/flaskapp/templates
+            sudo mkdir -p /var/www/flaskapp
+          EOF
 
       - name: Copy index.html and dsaapp.py to VM
         run: |
