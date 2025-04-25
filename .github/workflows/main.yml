@@ -1,0 +1,198 @@
+# .github/workflows/deploy-dsa-vms.yml
+name: Deploy Global Web VMs for DSA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-vms:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        region: [centralindia, eastus, westeurope]
+    env:
+     ADMIN_PASSWORD: ${{ secrets.VM_PASSWORD }}
+    
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Create resource group
+        run: |
+          az group create --name dsa-rg-${{ matrix.region }} --location ${{ matrix.region }}
+
+      - name: Create VM with Flask App (Password-based Auth)
+        run: |
+          az vm create \
+            --resource-group dsa-rg-${{ matrix.region }} \
+            --name webvm-${{ matrix.region }} \
+            --image UbuntuLTS \
+            --admin-username azureuser \
+            --admin-password $ADMIN_PASSWORD \
+            --custom-data "${{ github.workspace }}/cloud-init.yml"
+
+      - name: Open port 80
+        run: |
+          az vm open-port --port 80 --resource-group dsa-rg-${{ matrix.region }} --name webvm-${{ matrix.region }}
+
+# cloud-init.yml (placed in repo root for auto-deployment)
+# Auto-deploy Flask DSA app
+
+#cloud-config
+package_update: true
+packages:
+  - python3
+  - python3-pip
+  - nginx
+
+runcmd:
+  - pip3 install flask
+  - mkdir -p /var/www/flaskapp
+  - cd /var/www/flaskapp
+  - echo "
+    from flask import Flask, jsonify, render_template
+    import socket, datetime
+
+    app = Flask(__name__)
+
+   @app.route('/')
+    def home():
+    return render_template('index.html')
+
+@app.route('/api/data')
+def api():
+    return jsonify({
+        'server': socket.gethostname(),
+        'timestamp': datetime.datetime.now().isoformat()
+    })
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=80)
+" > /var/www/flaskapp/app.py
+
+  - mkdir -p /var/www/flaskapp/templates
+  - echo "
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DSA Flask App</title>
+  <style>
+    body { font-family: Arial; text-align: center; padding-top: 50px; }
+    h1 { color: #2196f3; }
+  </style>
+</head>
+<body>
+  <h1>🌐 Dynamic Site Acceleration</h1>
+  <p id='info'>Loading...</p>
+  <script>
+    fetch('/api/data')
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById('info').innerText =
+          `Served by ${data.server} at ${data.timestamp}`;
+      });
+  </script>
+</body>
+</html>
+" > /var/www/flaskapp/templates/index.html
+
+  - echo "[Unit]
+Description=Flask App
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /var/www/flaskapp/app.py
+WorkingDirectory=/var/www/flaskapp
+Restart=always
+
+[Install]
+WantedBy=multi-user.target" > /etc/systemd/system/flaskapp.service
+
+  - systemctl daemon-reexec
+  - systemctl daemon-reload
+  - systemctl enable flaskapp
+  - systemctl start flaskapp
+
+# .github/workflows/setup-frontdoor.yml
+name: Setup Azure Front Door with DSA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-frontdoor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create central resource group
+        run: |
+          az group create --name dsa-central-rg --location centralindia
+
+      - name: Create Front Door profile (Standard SKU)
+        run: |
+          az network front-door profile create \
+            --name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --sku Standard_AzureFrontDoor
+
+      - name: Create backend pool with geo-filtered VMs
+        run: |
+          az network front-door origin-group create \
+            --profile-name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --origin-group-name dsa-backends \
+            --probe-request-type GET \
+            --probe-protocol Http \
+            --probe-path / \
+            --probe-interval 30
+
+          az network front-door origin create \
+            --profile-name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --origin-group-name dsa-backends \
+            --origin-name vm-centralindia \
+            --host-name webvm-centralindia.centralindia.cloudapp.azure.com \
+            --enabled-state Enabled \
+            --geo-match "IN"
+
+          az network front-door origin create \
+            --profile-name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --origin-group-name dsa-backends \
+            --origin-name vm-eastus \
+            --host-name webvm-eastus.eastus.cloudapp.azure.com \
+            --enabled-state Enabled \
+            --geo-match "US"
+
+          az network front-door origin create \
+            --profile-name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --origin-group-name dsa-backends \
+            --origin-name vm-westeurope \
+            --host-name webvm-westeurope.westeurope.cloudapp.azure.com \
+            --enabled-state Enabled \
+            --geo-match "FR,DE,GB"
+
+      - name: Create endpoint and routing rule
+        run: |
+          az network front-door endpoint create \
+            --profile-name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --endpoint-name dsa-endpoint
+
+          az network front-door route create \
+            --profile-name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --route-name dsa-route \
+            --endpoint-name dsa-endpoint \
+            --origin-group dsa-backends \
+            --route-type Forwarding \
+            --https-redirect Enabled \
+            --supported-protocols Http Https \
+            --patterns-to-match /*
