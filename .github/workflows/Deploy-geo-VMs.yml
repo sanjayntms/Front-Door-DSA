@@ -69,30 +69,9 @@ jobs:
       
          # Move files to proper location
          sudo mv /home/azureuser/index.html /var/www/flaskapp/templates/index.html
-         sudo mv /home/azureuser/dsaapp.py /var/www/flaskapp/app.py
+         sudo mv /home/azureuser/dsaapp.py /var/www/flaskapp/dsaapp.py
 
          # Install Flask
          sudo apt update
          sudo apt install -y python3-flask
-
-         # Create systemd service
-         echo "[Unit]
-         Description=Gunicorn instance to serve flaskapp
-         After=network.target
-
-         [Service]
-          User=www-data
-          Group=www-data
-         WorkingDirectory=/var/www/flaskapp
-         ExecStart=/usr/bin/python3 /var/www/flaskapp/app.py
-         Restart=always
-
-         [Install]
-         WantedBy=multi-user.target" | sudo tee /etc/systemd/system/flaskapp.service > /dev/null
-
-         # Reload systemd and start service
-         sudo systemctl daemon-reexec
-         sudo systemctl daemon-reload
-         sudo systemctl enable flaskapp.service
-         sudo systemctl start flaskapp.service
          EOF
