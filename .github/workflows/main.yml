@@ -30,7 +30,7 @@ jobs:
           az vm create \
             --resource-group dsa-rg-${{ matrix.region }} \
             --name webvm-${{ matrix.region }} \
-            --image UbuntuLTS \
+            --image Ubuntu2204 \
             --admin-username azureuser \
             --admin-password $ADMIN_PASSWORD
 
