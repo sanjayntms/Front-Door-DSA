@@ -13,72 +13,80 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Add Azure Front Door extension
+        run: |
+          az extension add --name front-door
+
       - name: Create central resource group
         run: |
           az group create --name dsa-central-rg --location centralindia
 
-      - name: Add Azure Front Door extension
-        run: |
-          az extension add --name front-door
       - name: Create Front Door Premium profile
         run: |
-          az network front-door profile create \
-            --name dsa-frontdoor-profile \
+          az afd profile create \
             --resource-group dsa-central-rg \
+            --name dsa-frontdoor-profile \
             --sku Premium_AzureFrontDoor
 
       - name: Create backend pool with geo-filtered VMs
         run: |
-          az network front-door origin-group create \
-            --profile-name dsa-frontdoor-profile \
+          az afd origin-group create \
             --resource-group dsa-central-rg \
+            --profile-name dsa-frontdoor-profile \
             --origin-group-name dsa-backends \
             --probe-request-type GET \
             --probe-protocol Http \
             --probe-path / \
-            --probe-interval 30
+            --probe-interval-in-seconds 30
 
-          az network front-door origin create \
-            --profile-name dsa-frontdoor-profile \
+          az afd origin create \
             --resource-group dsa-central-rg \
+            --profile-name dsa-frontdoor-profile \
             --origin-group-name dsa-backends \
             --origin-name vm-centralindia \
             --host-name webvm-centralindia.centralindia.cloudapp.azure.com \
             --enabled-state Enabled \
-            --geo-match "IN"
+            --priority 1 \
+            --weight 100 \
+            --location centralindia
 
-          az network front-door origin create \
-            --profile-name dsa-frontdoor-profile \
+          az afd origin create \
             --resource-group dsa-central-rg \
+            --profile-name dsa-frontdoor-profile \
             --origin-group-name dsa-backends \
             --origin-name vm-eastus \
             --host-name webvm-eastus.eastus.cloudapp.azure.com \
             --enabled-state Enabled \
-            --geo-match "US"
+            --priority 1 \
+            --weight 100 \
+            --location eastus
 
-          az network front-door origin create \
-            --profile-name dsa-frontdoor-profile \
+          az afd origin create \
             --resource-group dsa-central-rg \
+            --profile-name dsa-frontdoor-profile \
             --origin-group-name dsa-backends \
             --origin-name vm-westeurope \
             --host-name webvm-westeurope.westeurope.cloudapp.azure.com \
             --enabled-state Enabled \
-            --geo-match "FR,DE,GB"
+            --priority 1 \
+            --weight 100 \
+            --location westeurope
 
       - name: Create endpoint and routing rule
         run: |
-          az network front-door endpoint create \
-            --profile-name dsa-frontdoor-profile \
+          az afd endpoint create \
             --resource-group dsa-central-rg \
+            --profile-name dsa-frontdoor-profile \
             --endpoint-name dsa-endpoint
 
-          az network front-door route create \
-            --profile-name dsa-frontdoor-profile \
+          az afd route create \
             --resource-group dsa-central-rg \
-            --route-name dsa-route \
+            --profile-name dsa-frontdoor-profile \
             --endpoint-name dsa-endpoint \
+            --route-name dsa-route \
             --origin-group dsa-backends \
-            --route-type Forwarding \
             --https-redirect Enabled \
             --supported-protocols Http Https \
-            --patterns-to-match /*
+            --patterns-to-match /* \
+            --forwarding-protocol MatchRequest \
+            --enabled-state Enabled
