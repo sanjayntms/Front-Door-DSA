@@ -1,4 +1,3 @@
-# .github/workflows/deploy-dsa-vms.yml
 name: Deploy Global Web VMs for DSA
 
 on:
@@ -10,15 +9,18 @@ jobs:
     strategy:
       matrix:
         region: [centralindia, eastus, westeurope]
+     
     env:
-     ADMIN_PASSWORD: ${{ secrets.VM_PASSWORD }}
-    
+      ADMIN_PASSWORD: ${{ secrets.VM_PASSWORD }}
     steps:
+      - name: Checkout GitHub repository
+        uses: actions/checkout@v2  # Checkout the repository to access files like index.html and dsaapp.py
+
       - name: Login to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
+
       - name: Create resource group
         run: |
           az group create --name dsa-rg-${{ matrix.region }} --location ${{ matrix.region }}
@@ -37,162 +39,42 @@ jobs:
         run: |
           az vm open-port --port 80 --resource-group dsa-rg-${{ matrix.region }} --name webvm-${{ matrix.region }}
 
-# cloud-init.yml (placed in repo root for auto-deployment)
-# Auto-deploy Flask DSA app
-
-#cloud-config
-package_update: true
-packages:
-  - python3
-  - python3-pip
-  - nginx
-
-runcmd:
-  - pip3 install flask
-  - mkdir -p /var/www/flaskapp
-  - cd /var/www/flaskapp
-  - echo "
-    from flask import Flask, jsonify, render_template
-    import socket, datetime
-
-    app = Flask(__name__)
-
-   @app.route('/')
-    def home():
-    return render_template('index.html')
-
-@app.route('/api/data')
-def api():
-    return jsonify({
-        'server': socket.gethostname(),
-        'timestamp': datetime.datetime.now().isoformat()
-    })
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=80)
-" > /var/www/flaskapp/app.py
-
-  - mkdir -p /var/www/flaskapp/templates
-  - echo "
-<!DOCTYPE html>
-<html>
-<head>
-  <title>DSA Flask App</title>
-  <style>
-    body { font-family: Arial; text-align: center; padding-top: 50px; }
-    h1 { color: #2196f3; }
-  </style>
-</head>
-<body>
-  <h1>🌐 Dynamic Site Acceleration</h1>
-  <p id='info'>Loading...</p>
-  <script>
-    fetch('/api/data')
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById('info').innerText =
-          `Served by ${data.server} at ${data.timestamp}`;
-      });
-  </script>
-</body>
-</html>
-" > /var/www/flaskapp/templates/index.html
-
-  - echo "[Unit]
-Description=Flask App
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/python3 /var/www/flaskapp/app.py
-WorkingDirectory=/var/www/flaskapp
-Restart=always
-
-[Install]
-WantedBy=multi-user.target" > /etc/systemd/system/flaskapp.service
-
-  - systemctl daemon-reexec
-  - systemctl daemon-reload
-  - systemctl enable flaskapp
-  - systemctl start flaskapp
-
-# .github/workflows/setup-frontdoor.yml
-name: Setup Azure Front Door with DSA
-
-on:
-  workflow_dispatch:
-
-jobs:
-  setup-frontdoor:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Login to Azure
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Create central resource group
+      - name: Retrieve Public IP of VM
+        id: get_public_ip
         run: |
-          az group create --name dsa-central-rg --location centralindia
+          PUBLIC_IP=$(az vm list-ip-addresses --resource-group dsa-rg-${{ matrix.region }} --name webvm-${{ matrix.region }} --query "[0].virtualMachine.network.publicIpAddresses[0].ipAddress" -o tsv)
+          echo "PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
 
-      - name: Create Front Door profile (Standard SKU)
+      - name: Install sshpass
         run: |
-          az network front-door profile create \
-            --name dsa-frontdoor-profile \
-            --resource-group dsa-central-rg \
-            --sku Standard_AzureFrontDoor
+          sudo apt-get install -y sshpass
 
-      - name: Create backend pool with geo-filtered VMs
+      - name: Copy index.html and dsaapp.py to VM
         run: |
-          az network front-door origin-group create \
-            --profile-name dsa-frontdoor-profile \
-            --resource-group dsa-central-rg \
-            --origin-group-name dsa-backends \
-            --probe-request-type GET \
-            --probe-protocol Http \
-            --probe-path / \
-            --probe-interval 30
+          sshpass -p $ADMIN_PASSWORD scp -o StrictHostKeyChecking=no $GITHUB_WORKSPACE/index.html azureuser@${{ env.PUBLIC_IP }}:/var/www/flaskapp/templates/index.html
+          sshpass -p $ADMIN_PASSWORD scp -o StrictHostKeyChecking=no $GITHUB_WORKSPACE/dsaapp.py azureuser@${{ env.PUBLIC_IP }}:/var/www/flaskapp/app.py
 
-          az network front-door origin create \
-            --profile-name dsa-frontdoor-profile \
-            --resource-group dsa-central-rg \
-            --origin-group-name dsa-backends \
-            --origin-name vm-centralindia \
-            --host-name webvm-centralindia.centralindia.cloudapp.azure.com \
-            --enabled-state Enabled \
-            --geo-match "IN"
-
-          az network front-door origin create \
-            --profile-name dsa-frontdoor-profile \
-            --resource-group dsa-central-rg \
-            --origin-group-name dsa-backends \
-            --origin-name vm-eastus \
-            --host-name webvm-eastus.eastus.cloudapp.azure.com \
-            --enabled-state Enabled \
-            --geo-match "US"
-
-          az network front-door origin create \
-            --profile-name dsa-frontdoor-profile \
-            --resource-group dsa-central-rg \
-            --origin-group-name dsa-backends \
-            --origin-name vm-westeurope \
-            --host-name webvm-westeurope.westeurope.cloudapp.azure.com \
-            --enabled-state Enabled \
-            --geo-match "FR,DE,GB"
-
-      - name: Create endpoint and routing rule
+      - name: Create flaskapp service and enable it
         run: |
-          az network front-door endpoint create \
-            --profile-name dsa-frontdoor-profile \
-            --resource-group dsa-central-rg \
-            --endpoint-name dsa-endpoint
+          sshpass -p $ADMIN_PASSWORD ssh -o StrictHostKeyChecking=no azureuser@${{ env.PUBLIC_IP }} << 'EOF'
+            sudo echo "[Unit]
+            Description=Flask App
+            After=network.target
 
-          az network front-door route create \
-            --profile-name dsa-frontdoor-profile \
-            --resource-group dsa-central-rg \
-            --route-name dsa-route \
-            --endpoint-name dsa-endpoint \
-            --origin-group dsa-backends \
-            --route-type Forwarding \
-            --https-redirect Enabled \
-            --supported-protocols Http Https \
-            --patterns-to-match /*
+            [Service]
+            ExecStart=/usr/bin/python3 /var/www/flaskapp/app.py
+            WorkingDirectory=/var/www/flaskapp
+            Restart=always
+
+            [Install]
+            WantedBy=multi-user.target" > /etc/systemd/system/flaskapp.service
+
+            sudo systemctl daemon-reexec
+            sudo systemctl daemon-reload
+            sudo systemctl enable flaskapp
+            sudo systemctl start flaskapp
+          EOF
+
+      - name: Restart Flask app service
+        run: |
+          sshpass -p $ADMIN_PASSWORD ssh -o StrictHostKeyChecking=no azureuser@${{ env.PUBLIC_IP }} "sudo systemctl restart flaskapp"
