@@ -37,7 +37,10 @@ jobs:
             --probe-request-type GET \
             --probe-protocol Http \
             --probe-path / \
-            --probe-interval-in-seconds 30
+            --probe-interval-in-seconds 30 \
+            --load-balancing-sample-size 4 \
+            --successful-samples-required 3 \
+            --additional-latency-in-milliseconds 0
 
           az afd origin create \
             --resource-group dsa-central-rg \
