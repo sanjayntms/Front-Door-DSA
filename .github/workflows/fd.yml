@@ -28,6 +28,16 @@ jobs:
             --name dsa-frontdoor-profile \
             --sku Premium_AzureFrontDoor
 
+      - name: Create load balancing settings
+        run: |
+          az afd load-balancing-settings create \
+            --resource-group dsa-central-rg \
+            --profile-name dsa-frontdoor-profile \
+            --load-balancing-settings-name dsa-load-settings \
+            --sample-size 4 \
+            --successful-samples-required 3 \
+            --additional-latency-in-milliseconds 0
+
       - name: Create backend pool with geo-filtered VMs
         run: |
           az afd origin-group create \
@@ -38,9 +48,7 @@ jobs:
             --probe-protocol Http \
             --probe-path / \
             --probe-interval-in-seconds 30 \
-            --load-balancing-sample-size 4 \
-            --successful-samples-required 3 \
-            --additional-latency-in-milliseconds 0
+            --load-balancing-settings dsa-load-settings
 
           az afd origin create \
             --resource-group dsa-central-rg \
