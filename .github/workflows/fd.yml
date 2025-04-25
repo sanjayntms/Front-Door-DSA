@@ -1,0 +1,81 @@
+# .github/workflows/setup-frontdoor.yml
+name: Setup Azure Front Door Premium for DSA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-frontdoor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create central resource group
+        run: |
+          az group create --name dsa-central-rg --location centralindia
+
+      - name: Create Front Door Premium profile
+        run: |
+          az network front-door profile create \
+            --name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --sku Premium_AzureFrontDoor
+
+      - name: Create backend pool with geo-filtered VMs
+        run: |
+          az network front-door origin-group create \
+            --profile-name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --origin-group-name dsa-backends \
+            --probe-request-type GET \
+            --probe-protocol Http \
+            --probe-path / \
+            --probe-interval 30
+
+          az network front-door origin create \
+            --profile-name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --origin-group-name dsa-backends \
+            --origin-name vm-centralindia \
+            --host-name webvm-centralindia.centralindia.cloudapp.azure.com \
+            --enabled-state Enabled \
+            --geo-match "IN"
+
+          az network front-door origin create \
+            --profile-name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --origin-group-name dsa-backends \
+            --origin-name vm-eastus \
+            --host-name webvm-eastus.eastus.cloudapp.azure.com \
+            --enabled-state Enabled \
+            --geo-match "US"
+
+          az network front-door origin create \
+            --profile-name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --origin-group-name dsa-backends \
+            --origin-name vm-westeurope \
+            --host-name webvm-westeurope.westeurope.cloudapp.azure.com \
+            --enabled-state Enabled \
+            --geo-match "FR,DE,GB"
+
+      - name: Create endpoint and routing rule
+        run: |
+          az network front-door endpoint create \
+            --profile-name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --endpoint-name dsa-endpoint
+
+          az network front-door route create \
+            --profile-name dsa-frontdoor-profile \
+            --resource-group dsa-central-rg \
+            --route-name dsa-route \
+            --endpoint-name dsa-endpoint \
+            --origin-group dsa-backends \
+            --route-type Forwarding \
+            --https-redirect Enabled \
+            --supported-protocols Http Https \
+            --patterns-to-match /*
