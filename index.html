@@ -2,23 +2,99 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DSA Flask App</title>
+  <title>🌐 NTMS Azure Batch Dynamic Site Acceleration</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
-    h1 { color: #2196f3; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      text-align: center;
+      padding: 50px;
+      background: linear-gradient(to right, #00c6ff, #0072ff);
+      color: white;
+    }
+    h1 { font-size: 2.5em; }
+    form { margin: 20px auto; width: 300px; }
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      border: none;
+      border-radius: 5px;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 20px;
+      background: white;
+      color: #0072ff;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    .result {
+      margin-top: 30px;
+      font-size: 1.2em;
+    }
+    table {
+      margin: 40px auto;
+      width: 90%;
+      max-width: 800px;
+      border-collapse: collapse;
+      background-color: rgba(255,255,255,0.15);
+    }
+    th, td {
+      border: 1px solid #fff;
+      padding: 12px;
+      text-align: left;
+    }
+    th {
+      background-color: rgba(255,255,255,0.2);
+    }
   </style>
 </head>
 <body>
   <h1>🌐 Dynamic Site Acceleration</h1>
-  <p id="info">Loading...</p>
-  <script>
-    fetch('/api/data')
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById('info').innerText =
-          `Served by ${data.server} at ${data.timestamp}`;
-      });
-  </script>
+  <form method="POST">
+    <input type="text" name="name" placeholder="Your Name" required />
+    <textarea name="message" placeholder="Your Message" rows="4" required></textarea>
+    <button type="submit">Send</button>
+  </form>
+
+  {% if name %}
+  <div class="result">
+    <p><strong>Name:</strong> {{ name }}</p>
+    <p><strong>Message:</strong> {{ message }}</p>
+    <p><strong>Served By:</strong> {{ server }}</p>
+    <p><strong>Time:</strong> {{ time }}</p>
+    <p><strong>Latency:</strong> {{ latency }} ms</p>
+  </div>
+  {% endif %}
+
+  <table>
+    <tr>
+      <th>Feature</th>
+      <th>Your Setup</th>
+      <th>DSA Optimization Benefit</th>
+    </tr>
+    <tr>
+      <td>🐍 Flask App (Dynamic HTML)</td>
+      <td><code>index.html</code> rendered dynamically</td>
+      <td><strong>Fast edge-to-origin routing for dynamic content</strong></td>
+    </tr>
+    <tr>
+      <td>🌍 Multiple VMs (regions)</td>
+      <td>Central India, East US, West Europe</td>
+      <td><strong>Geo-proximity delivery via Front Door Anycast</strong></td>
+    </tr>
+    <tr>
+      <td>🔁 Routing Rules</td>
+      <td>Forwarded via Azure Front Door</td>
+      <td><strong>Connection reuse and path optimization</strong></td>
+    </tr>
+    <tr>
+      <td>📈 Time-stamped Response</td>
+      <td>Shows real-time served-from region</td>
+      <td><strong>Proof of low-latency dynamic delivery</strong></td>
+    </tr>
+  </table>
 </body>
 </html>
