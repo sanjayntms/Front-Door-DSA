@@ -17,6 +17,9 @@ jobs:
         run: |
           az group create --name dsa-central-rg --location centralindia
 
+      - name: Add Azure Front Door extension
+        run: |
+          az extension add --name front-door
       - name: Create Front Door Premium profile
         run: |
           az network front-door profile create \
