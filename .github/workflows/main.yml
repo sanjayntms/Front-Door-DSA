@@ -58,10 +58,16 @@ jobs:
             sudo mkdir -p /var/www/flaskapp
           EOF
 
-      - name: Copy index.html and dsaapp.py to VM
-        run: |
-          sshpass -p $ADMIN_PASSWORD scp -o StrictHostKeyChecking=no $GITHUB_WORKSPACE/index.html azureuser@${{ env.PUBLIC_IP }}:/var/www/flaskapp/templates/index.html
-          sshpass -p $ADMIN_PASSWORD scp -o StrictHostKeyChecking=no $GITHUB_WORKSPACE/dsaapp.py azureuser@${{ env.PUBLIC_IP }}:/var/www/flaskapp/app.py
+      - name: Copy files and deploy Flask app
+  run: |
+    sshpass -p $ADMIN_PASSWORD scp -o StrictHostKeyChecking=no $GITHUB_WORKSPACE/index.html azureuser@$PUBLIC_IP:/home/azureuser/index.html
+    sshpass -p $ADMIN_PASSWORD scp -o StrictHostKeyChecking=no $GITHUB_WORKSPACE/dsaapp.py azureuser@$PUBLIC_IP:/home/azureuser/dsaapp.py
+
+    sshpass -p $ADMIN_PASSWORD ssh -o StrictHostKeyChecking=no azureuser@$PUBLIC_IP <<EOF
+      sudo mkdir -p /var/www/flaskapp/templates
+      sudo mv /home/azureuser/index.html /var/www/flaskapp/templates/index.html
+      sudo mv /home/azureuser/dsaapp.py /var/www/flaskapp/app.py
+    EOF
 
       - name: Create flaskapp service and enable it
         run: |
