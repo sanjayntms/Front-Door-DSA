@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        region: [centralindia, eastus, westeurope]
+        region: [centralindia, eastus, westeurope, Australia East]
      
     env:
       ADMIN_PASSWORD: ${{ secrets.VM_PASSWORD }}
