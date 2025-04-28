@@ -51,9 +51,9 @@ jobs:
       - name: Install Flask and related components on VM
         run: |
           sshpass -p $ADMIN_PASSWORD ssh -o StrictHostKeyChecking=no azureuser@${{ env.PUBLIC_IP }} << 'EOF'
-            sudo apt-get update -qq
-            sudo apt-get install -q -y python3 python3-pip
-            sudo pip3 install flask
+            sudo apt-get update -qq > /dev/null
+            sudo apt-get install -y python3 python3-pip -qq > /dev/null
+            sudo pip3 install flask -qq > /dev/null
             sudo mkdir -p /var/www/flaskapp
             sudo mkdir -p /var/www/flaskapp/templates
             
