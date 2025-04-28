@@ -1,10 +1,20 @@
 name: Delete Demo Resource Groups
 
 on:
-  workflow_dispatch:  # manual trigger
+  workflow_dispatch:
+    inputs:
+      confirm1:
+        description: "Are you sure you want to DELETE the resource groups? (type YES)"
+        required: true
+        default: "NO"
+      confirm2:
+        description: "Type DELETE again to confirm (type DELETE)"
+        required: true
+        default: "NO"
 
 jobs:
   delete-rgs:
+    if: ${{ github.event.inputs.confirm1 == 'YES' && github.event.inputs.confirm2 == 'DELETE' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
