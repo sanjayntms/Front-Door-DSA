@@ -3,8 +3,8 @@ Description=Flask App Service
 After=network.target
 
 [Service]
-User=www-data
-Group=www-data
+User=root
+Group=root
 WorkingDirectory=/var/www/flaskapp
 ExecStart=/usr/bin/python3 /var/www/flaskapp/dsaapp.py
 
