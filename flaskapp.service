@@ -1,0 +1,16 @@
+[Unit]
+Description=Flask App Service
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/flaskapp
+ExecStart=/usr/bin/python3 /var/www/flaskapp/dsaapp.py
+
+Restart=always
+Environment=FLASK_ENV=production
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
