@@ -34,9 +34,9 @@ jobs:
             --admin-username azureuser \
             --admin-password $ADMIN_PASSWORD
 
-      - name: Open port 80
+      - name: Open port 443
         run: |
-          az vm open-port --port 80 --resource-group dsa-rg-${{ matrix.region }} --name webvm-${{ matrix.region }}
+          az vm open-port --port 443 --resource-group dsa-rg-${{ matrix.region }} --name webvm-${{ matrix.region }}
 
       - name: Retrieve Public IP of VM
         id: get_public_ip
